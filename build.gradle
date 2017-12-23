@@ -1,0 +1,72 @@
+apply plugin: 'base'
+apply plugin: 'java'
+
+repositories {
+  mavenCentral()
+}
+
+dependencies {
+  testCompile 'junit:junit:4.12'
+}
+
+tasks.withType(Test) {
+  outputs.upToDateWhen {false}
+  testLogging.showStandardStreams = true
+  testLogging.exceptionFormat = 'full'
+  jvmArgs += '-javaagent:D:/lang/java/aspectj/aspectjweaver.jar'
+}
+
+//compileJava.dependsOn += 'generSrc'
+
+task generSrc {
+  def filesCount = 2000
+  def srcDir = sourceSets.main.java.srcDirs[0]
+  mkdir(srcDir)
+  ext.generatedClassesNames = 
+    (1..filesCount).collect { String.format("Auto%04d", it) }
+  def generatedSourceFilesNames = generatedClassesNames.collect { it + ".java" }
+  def generatedClassesFilesNames = generatedClassesNames.collect { it + ".class" }
+  def generatedSourceFiles = generatedSourceFilesNames.collect { new File(srcDir, it) }
+  //outputs.files(generatedSourceFiles)
+  outputs.dir(srcDir)
+  doLast {
+    [generatedClassesNames, generatedSourceFiles].transpose().collect { tuple ->
+      def className = tuple[0]
+      def file = tuple[1]
+      file.text = """
+        public class $className {
+          private int a;
+          
+          public $className() {
+            a = 1;
+          }
+
+          @Override public String toString() {
+            return "" + a;
+          }
+          
+          private String someString() {
+            return "string " + a;
+          }
+
+          public static void main(String[] args) throws InterruptedException {
+            while (true) {
+              System.out.println("time " + System.currentTimeMillis() + " " + new $className().someString());
+              Thread.sleep(2000);
+            }
+          }
+        }
+      """
+    }
+  }
+}
+
+task runApp(type: JavaExec) {
+  classpath = sourceSets.main.runtimeClasspath
+
+  main = tasks.generSrc.generatedClassesNames[0]
+  
+  jvmArgs "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=7778"
+}
+
+clean.dependsOn += 'cleanGenerSrc'
